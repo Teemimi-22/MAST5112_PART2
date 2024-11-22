@@ -11,7 +11,7 @@ type MenuItem = {
   name: string;
   description?: string;
   course?: string;
-  price: string;
+  price: number;
 };
 
 type RootStackParamList = {
@@ -112,15 +112,23 @@ function HomeScreen({ route, navigation }: NativeStackScreenProps<RootStackParam
 
   const renderItem = ({ item }: { item: MenuItem }) => (
     <View style={styles.menuItem}>
-      <Text style={styles.menuItemText}>{item.name} - {item.course || ''} - {item.price}</Text>
+      <Text style={styles.menuItemText}>{item.name} - {item.course || ''} - R{item.price}</Text>
     </View>
   );
+
+  const calculateAveragePrice = () => {
+    if (menuItems.length === 0) return 0;
+    const total = menuItems.reduce((sum, item) => sum + item.price, 0);
+    return total / menuItems.length;
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.welcomeText}>Main Menu</Text>
       <Text style={styles.menuCountText}>You have 6 courses to choose from. </Text>
       <Text style={styles.menuCountText}>Total Menu Items Selected: {menuItems.length}</Text>
+
+      <Text style={styles.menuCountText}>Average Price: R{calculateAveragePrice().toFixed(2)}</Text>
 
       <DropDownPicker
         open={open}
@@ -142,103 +150,80 @@ function HomeScreen({ route, navigation }: NativeStackScreenProps<RootStackParam
         style={styles.menuList}
       />
 
-      <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('AddMenuItemScreen')}>
-        <Text style={styles.addButtonText}>+ Add Menu Item</Text>
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => navigation.navigate('AddMenuItemScreen', { menuItems, setMenuItems })}
+      >
+        <Text style={styles.addButtonText}>+ Add or Remove Menu Item</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-function AddMenuItemScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'AddMenuItemScreen'>) {
+function AddMenuItemScreen({
+  route,
+  navigation,
+}: NativeStackScreenProps<RootStackParamList, 'AddMenuItemScreen'>) {
+  const { menuItems, setMenuItems } = route.params || {};
   const [dishName, setDishName] = useState<string>('');
   const [description, setDescription] = useState<string>('');
-  const [course, setCourse] = useState<string>('');
-  const [price, setPrice] = useState<string>('');
+  const [SelectedCourse, setCourse] = useState<string>('');
+  const [price, setPrice] = useState<string>(''); // Store price as a string for input
   const [isCourseDropdownVisible, setCourseDropdownVisible] = useState(false);
 
   const courseOptions = ['Starter', 'Main Course', 'Dessert'];
 
-  const validateInputs = () => {
-    if (!dishName || !description || !price || !course) {
-      Alert.alert('Error', 'Please fill in all fields.');
-      return false;
-    }
-    if (isNaN(Number(price))) {
-      Alert.alert('Error', 'Please enter a valid price.');
-      return false;
-    }
-    return true;
-  };
-
   const handleSave = () => {
-    if (!validateInputs()) return;
+    const priceInt = parseInt(price); // Convert the price to an integer
+
+    if (isNaN(priceInt)) {
+      Alert.alert('Error', 'Please enter a valid price.');
+      return;
+    }
 
     const newMenuItem: MenuItem = {
       id: Math.random().toString(),
+      course: SelectedCourse,
       name: dishName,
       description: description,
-      price: `R${price}`,
+      price: priceInt, 
     };
 
-    navigation.navigate('HomeScreen', { newMenuItem });
+    setMenuItems((prevItems: MenuItem[]) => [...prevItems, newMenuItem]);
+    navigation.navigate('HomeScreen');
   };
 
-  const renderCourseOption = ({ item }: { item: string }) => (
-    <TouchableOpacity
-      style={styles.optionItem}
-      onPress={() => {
-        setCourse(item);
-        setCourseDropdownVisible(false);
-      }}
-    >
-      <Text style={styles.optionText}>{item}</Text>
-    </TouchableOpacity>
+  const handleRemoveItem = (id: string) => {
+    setMenuItems((prevItems: MenuItem[]) => prevItems.filter(item => item.id !== id));
+  };
+
+  const renderMenuItem = ({ item }: { item: MenuItem }) => (
+    <View style={styles.menuItem}>
+      <Text style={styles.menuItemText}>{item.name} - {item.course || ''} - R{item.price}</Text>
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => handleRemoveItem(item.id)}
+      >
+        <Text style={styles.deleteButtonText}>Remove</Text>
+      </TouchableOpacity>
+    </View>
   );
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.headerText}>Add New Menu Item</Text>
-
-      <Text style={styles.label}>Choose Course:</Text>
-      <TouchableOpacity
-        style={styles.dropdownButton}
-        onPress={() => setCourseDropdownVisible(true)}
-      >
-        <Text style={styles.dropdownButtonText}>
-          {course ? course : 'Select Course'}
-        </Text>
-        <Ionicons name="chevron-down" size={20} color="#0F52BA" style={styles.icon} />
-      </TouchableOpacity>
-
-      <Modal
-        transparent={true}
-        visible={isCourseDropdownVisible}
-        animationType="fade"
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.dropdownContainer}>
-            <FlatList
-              data={courseOptions}
-              renderItem={renderCourseOption}
-              keyExtractor={(item) => item}
-            />
-          </View>
-        </View>
-      </Modal>
+      <Text style={styles.headerText}>Add or Remove Menu Item</Text>
 
       <TextInput
         style={styles.input}
         placeholder="Dish Name"
         value={dishName}
         onChangeText={setDishName}
-        editable={course !== ''}
       />
       <TextInput
         style={styles.input}
         placeholder="Description"
         value={description}
         onChangeText={setDescription}
-        editable={course !== ''}
       />
       <TextInput
         style={styles.input}
@@ -246,18 +231,24 @@ function AddMenuItemScreen({ navigation }: NativeStackScreenProps<RootStackParam
         keyboardType="numeric"
         value={price}
         onChangeText={setPrice}
-        editable={course !== ''}
       />
 
       <Button title="Save Menu Item" onPress={handleSave} />
+
+      <FlatList
+        data={menuItems}
+        renderItem={renderMenuItem}
+        keyExtractor={item => item.id}
+        style={styles.menuList}
+      />
     </ScrollView>
   );
 }
 
 function StartersScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'StartersScreen'>) {
   const starters: MenuItem[] = [
-    { id: '1', name: 'Bruschetta', price: 'R50' },
-    { id: '2', name: 'Stuffed Mushrooms', price: 'R70' },
+    { id: '1', name: 'Bruschetta', price: 50 },
+    { id: '2', name: 'Stuffed Mushrooms', price: 70 },
   ];
 
   const handleSelectItem = (item: MenuItem) => {
@@ -284,8 +275,8 @@ function StartersScreen({ navigation }: NativeStackScreenProps<RootStackParamLis
 
 function MainCourseScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'MainCourseScreen'>) {
   const mainCourses: MenuItem[] = [
-    { id: '3', name: 'Grilled Salmon', price: 'R120' },
-    { id: '4', name: 'Beef Wellington', price: 'R200' },
+    { id: '3', name: 'Grilled Salmon', price: 120 },
+    { id: '4', name: 'Beef Wellington', price: 200 },
   ];
 
   const handleSelectItem = (item: MenuItem) => {
@@ -312,8 +303,8 @@ function MainCourseScreen({ navigation }: NativeStackScreenProps<RootStackParamL
 
 function DessertScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'DessertScreen'>) {
   const desserts: MenuItem[] = [
-    { id: '5', name: 'Chocolate Fondant', price: 'R80' },
-    { id: '6', name: 'Lemon Tart', price: 'R70' },
+    { id: '5', name: 'Chocolate Fondant', price: 80 },
+    { id: '6', name: 'Lemon Tart', price: 70 },
   ];
 
   const handleSelectItem = (item: MenuItem) => {
@@ -338,7 +329,7 @@ function DessertScreen({ navigation }: NativeStackScreenProps<RootStackParamList
   );
 }
 
-// Styles
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -446,4 +437,12 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 10,
   },
+  deleteButton: {
+    fontSize: 16,
+    color: '#000',
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    color: '#000',
+  }
 });
